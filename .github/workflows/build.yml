@@ -55,7 +55,7 @@ jobs:
                   # Delete the old devbuild release to avoid errors if it exists
                   gh release delete devbuild --cleanup-tag -y || true
                   # Create a new devbuild release and upload files
-                  gh release create devbuild --title "DevBuild $RELEASE_TAG" --prerelease dist/*
+                  gh release create devbuild --title "DevBuild $RELEASE_TAG" dist/*
               env:
                   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
                   RELEASE_TAG: ${{ env.release_tag }}
