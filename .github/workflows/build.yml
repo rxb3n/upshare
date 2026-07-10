@@ -50,10 +50,12 @@ jobs:
                   echo "release_tag=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
 
             - name: Upload DevBuild as release
-              if: github.repository == 'Vendicated/Vencord'
+              if: github.repository == 'rxb3n/upshare'
               run: |
-                  gh release upload devbuild --clobber dist/*
-                  gh release edit devbuild --title "DevBuild $RELEASE_TAG"
+                  # Delete the old devbuild release to avoid errors if it exists
+                  gh release delete devbuild --cleanup-tag -y || true
+                  # Create a new devbuild release and upload files
+                  gh release create devbuild --title "DevBuild $RELEASE_TAG" --prerelease dist/*
               env:
                   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
                   RELEASE_TAG: ${{ env.release_tag }}
