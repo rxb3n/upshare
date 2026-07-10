@@ -364,7 +364,7 @@ const ctxMenuPatch: NavContextMenuPatchCallback = (children) => {
         0,
         <Menu.MenuItem
             id="upload-big-file"
-            label="Upload Large File (FileDitch)"
+            label="Upload big big File"
             action={triggerFileUpload}
         />
     );
