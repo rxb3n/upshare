@@ -43,7 +43,7 @@ const settings = definePluginSettings({
     embedderBase: {
         type: OptionType.STRING,
         description: "Your Vercel embed proxy base URL (e.g. https://fileditch.vercel.app/api/embed).",
-        default: ""
+        default: "https://fileditch.vercel.app/api/video"
     }
 });
 
