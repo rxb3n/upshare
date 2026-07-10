@@ -4,7 +4,6 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-
 import { definePluginSettings } from "@api/Settings";
 import { Logger } from "@utils/Logger";
 import definePlugin, { OptionType } from "@utils/types";
@@ -14,8 +13,8 @@ import {
     MessageStore,
     Parser,
     Tooltip,
-    useStateFromStores,
     UserStore,
+    useStateFromStores,
 } from "@webpack/common";
 
 const logger = new Logger("MessagePeek");

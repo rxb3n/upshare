@@ -353,7 +353,7 @@ function triggerFileUpload() {
     document.body.removeChild(input);
 }
 
-const ctxMenuPatch: NavContextMenuPatchCallback = (children) => {
+const ctxMenuPatch: NavContextMenuPatchCallback = children => {
     if (!Array.isArray(children)) return;
 
     const alreadyAdded = children.some((child: any) => child?.props?.id === "upload-big-file");
