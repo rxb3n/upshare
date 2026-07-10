@@ -1,20 +1,23 @@
 /*
- * Vencord, a Discord client mod
- * SPDX-License-Identifier: GPL-3.0-or-later
- */
+* Vencord, a Discord client mod
+* SPDX-License-Identifier: GPL-3.0-or-later
+*/
 
 import { definePluginSettings } from "@api/Settings";
-import ErrorBoundary from "@components/ErrorBoundary";
-import definePlugin, { OptionType } from "@utils/types";
 import { Logger } from "@utils/Logger";
-import { findByPropsLazy, findStoreLazy } from "@webpack";
-import { React, Tooltip, useStateFromStores } from "@webpack/common";
+import definePlugin, { OptionType } from "@utils/types";
+import { findByPropsLazy } from "@webpack";
+import {
+    ChannelStore,
+    MessageStore,
+    Parser,
+    Tooltip,
+    useStateFromStores,
+    UserStore,
+} from "@webpack/common";
 
 const logger = new Logger("MessagePeek");
-const MessageStore = findStoreLazy("MessageStore");
-const ChannelStore = findStoreLazy("ChannelStore");
-const UserStore = findStoreLazy("UserStore");
-const Parser = findByPropsLazy("parseTopic", "parseInlineReply");
+
 const ChannelActions = findByPropsLazy("preload", "fetchChannel");
 
 const settings = definePluginSettings({
@@ -94,7 +97,7 @@ function MessagePeek({ channelId }: { channelId?: string; }) {
                 durationText = "a few seconds";
             }
 
-            content = `☎  Call ended after ${durationText}`;
+            content = `☎ Call ended after ${durationText}`;
         } else {
             content = "Started a call";
         }
@@ -110,125 +113,93 @@ function MessagePeek({ channelId }: { channelId?: string; }) {
     const authorName =
         isCurrentUser && settings.store.showYourselfAsYou
             ? "You"
-            : (lastMessage.author?.globalName || lastMessage.author?.username || "Unknown User");
+            : lastMessage.author?.globalName || lastMessage.author?.username || "Unknown User";
 
     const tooltipText =
         content.length > charLimit
             ? Parser.parse(content.slice(0, charLimit).trim() + "…")
             : Parser.parse(content);
 
+    const previewText =
+        content.length > 48
+            ? content.slice(0, 48).trim() + "…"
+            : content;
+
     return (
-        <div
-            style={{
-                marginBottom: "2px",
-                marginTop: "-2px",
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                whiteSpace: "nowrap"
-            }}
-        >
-            <Tooltip text={tooltipText}>
-                {tooltipProps => (
-                    <div
-                        {...tooltipProps}
-                        style={{
-                            fontSize: "12px",
-                            fontWeight: "var(--font-weight-medium)",
-                            lineHeight: "16px",
-                            overflow: "hidden",
-                            textOverflow: "ellipsis",
-                            whiteSpace: "nowrap"
-                        }}
-                    >
-                        {settings.store.showAuthor && !isCallActivity ? `${authorName}: ` : null}
-                        {Parser.parseInlineReply(content)}
-                    </div>
-                )}
-            </Tooltip>
-        </div>
+        <Tooltip text={tooltipText}>
+            {({ onMouseEnter, onMouseLeave }) => (
+                <div
+                    onMouseEnter={onMouseEnter}
+                    onMouseLeave={onMouseLeave}
+                    style={{
+                        overflow: "hidden",
+                        whiteSpace: "nowrap",
+                        textOverflow: "ellipsis",
+                        fontSize: "12px",
+                        lineHeight: "16px",
+                        color: "var(--text-normal)",
+                    }}
+                >
+                    {settings.store.showAuthor && !isCallActivity && (
+                        <span style={{ opacity: 0.75 }}>{authorName}: </span>
+                    )}
+                    {previewText}
+                </div>
+            )}
+        </Tooltip>
     );
 }
 
-const WrappedPeek = ErrorBoundary.wrap((props: { channelId?: string; }) => {
-    return <MessagePeek {...props} />;
-}, { noop: true });
-
-let styleEl: HTMLStyleElement | null = null;
-
 export default definePlugin({
     name: "MessagePeek",
-    description: "last message on dms",
+    description: "last dm chat",
     authors: [{ name: "Kirk", id: 0n }],
     settings,
 
-    patches: [
-        {
-            find: 'location:"PrivateChannel"',
-            replacement: [
-                {
-                    match: /subText:(.*?)(?=,name:\(0,i\.jsx\)\(g\.A,)/,
-                    replace: "subText:$self.renderDmSubText($1,t)"
-                }
-            ],
-            predicate: () => settings.store.showInDMs
-        }
-    ],
-
     start() {
-        logger.info("start called");
-        styleEl = document.createElement("style");
-        styleEl.id = "vc-messagepeek-style";
-        styleEl.textContent = css;
-        document.head.appendChild(styleEl);
-        this.preloadDMs();
+        const style = document.createElement("style");
+        style.id = "MessagePeekStyles";
+        style.textContent = css;
+        document.head.appendChild(style);
+
+        if (!settings.store.showInDMs) return;
+
+        const limit = settings.store.preloadLimit;
+        if (limit <= 0) return;
+
+        try {
+            const channels = ChannelStore.getSortedPrivateChannels?.() ?? [];
+            channels.slice(0, limit).forEach((channel: any) => {
+                if (!MessageStore.getMessages(channel.id)?.last()) {
+                    ChannelActions.preload(null, channel.id);
+                }
+            });
+        } catch (e) {
+            logger.error("Failed to preload DM channels", e);
+        }
     },
 
     stop() {
-        styleEl?.remove();
-        styleEl = null;
+        document.getElementById("MessagePeekStyles")?.remove();
     },
 
-    renderDmSubText(original: React.ReactNode, channel: any) {
-        const channelId = channel?.id;
+    patches: [
+        {
+            // Anchored to the dev-only invariant string inside the DM row renderer (eH).
+            find: '"PrivateChannel.renderAvatar: Invalid prop configuration',
+            replacement: {
+                // Stack our preview alongside the existing subText (status/activity/group count)
+                // instead of only falling back when subText is null — Discord shows subText
+                // even when a status/activity is present, so `??` alone would hide our preview.
+                match: /subText:(\i\.isSystemDM\(\).+?:null),name:/,
+                replace: (_, subText: string) =>
+                    `subText:[${subText},$self.renderMessagePeek(t.id)],name:`
+            },
+        },
+    ],
 
-        if (!channelId || !/^\d{17,20}$/.test(String(channelId))) return original;
-
-        return React.createElement(
-            React.Fragment,
-            null,
-            original,
-            React.createElement(WrappedPeek, {
-                channelId: String(channelId),
-                key: `vc-messagepeek-dm-${channelId}`
-            })
-        );
+    renderMessagePeek(channelId?: string) {
+        if (!settings.store.showInDMs) return null;
+        return <MessagePeek channelId={channelId} />;
     },
-
-    preloadDMs() {
-        const preload = ChannelActions?.preload;
-        if (!preload) {
-            logger.warn("no preload action found");
-            return;
-        }
-
-        const channels = ChannelStore.getSortedPrivateChannels?.() ?? [];
-        logger.info("private channels", channels.length);
-
-        channels
-            .filter((channel: any) =>
-                channel.lastMessageId &&
-                !MessageStore.getMessages(channel.id)?.last()
-            )
-            .slice(0, Math.min(settings.store.preloadLimit, 30))
-            .reduce((promise: Promise<void>, channel: any, index: number) => {
-                return promise.then(() => new Promise<void>(resolve => {
-                    try {
-                        preload("@me", channel.id);
-                    } catch (e) {
-                        logger.warn("preload failed", e);
-                    }
-                    setTimeout(resolve, 125 + index * 125);
-                }));
-            }, Promise.resolve());
-    }
 });
