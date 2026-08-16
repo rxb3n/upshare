@@ -17,7 +17,7 @@ import {
     Toasts
 } from "@webpack/common";
 
-const DISCORD_SIZE_LIMIT = 10 * 1024 * 1024;
+const DISCORD_SIZE_LIMIT = 20 * 1024 * 1024;
 const R2_SIZE_LIMIT = 5 * 1024 * 1024 * 1024;
 
 const settings = definePluginSettings({
