@@ -20,6 +20,8 @@ import {
 const DISCORD_SIZE_LIMIT = 20 * 1024 * 1024;
 const R2_SIZE_LIMIT = 5 * 1024 * 1024 * 1024;
 
+const VIDEO_EXTENSIONS = new Set(["mp4", "webm", "mov", "mkv", "avi", "m4v", "flv", "wmv"]);
+
 const settings = definePluginSettings({
     uploadApiUrl: {
         type: OptionType.STRING,
@@ -212,7 +214,7 @@ async function uploadFile(
     }
 
     const buffer = await file.arrayBuffer();
-    onProgress(10); // Connecting to get ticket
+    onProgress(10);
 
     const url = await helper.uploadToR2(
         buffer,
@@ -249,7 +251,12 @@ async function handleFiles(files: File[], channelId: string, forceUploadAll = fa
 
         try {
             const uploadedUrl = await uploadFile(file, id, progress => updateUpload(id, progress));
-            const content = `[\u2800](${uploadedUrl})`;
+
+            const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
+            const isVideo = file.type.startsWith("video/") || VIDEO_EXTENSIONS.has(ext);
+
+            // Hide the link using an invisible character for videos; keep it visible for everything else
+            const content = isVideo ? `[\u2800](${uploadedUrl})` : uploadedUrl;
 
             await RestAPI.post({
                 url: Constants.Endpoints.MESSAGES(channelId),
